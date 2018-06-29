@@ -21,6 +21,7 @@ import java.io.File
 import java.net.URI
 
 import org.scalatest.BeforeAndAfterEach
+import org.scalatest.Matchers
 
 import org.apache.spark.sql.{DataFrame, QueryTest, Row}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -32,7 +33,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SQLTestUtils
 
 class MultiFormatTableSuite
-  extends QueryTest with SQLTestUtils with TestHiveSingleton with BeforeAndAfterEach{
+  extends QueryTest with SQLTestUtils with TestHiveSingleton with BeforeAndAfterEach with Matchers {
   import testImplicits._
 
   val parser = new SparkSqlParser(new SQLConf())
@@ -122,11 +123,11 @@ class MultiFormatTableSuite
       }
     }
   }
-//  // This creates a parquet table and tests plans; writes data, etc.
+
+  // This creates a parquet table and tests plans; writes data, etc.
   test("create hive table with multi format partitions containing correct data") {
-    val catalog = spark.sessionState.catalog
     withTempDir { baseDir =>
-//      withSQLConf(HiveUtils.CONVERT_METASTORE_PARQUET.key -> "false") {
+      //      withSQLConf(HiveUtils.CONVERT_METASTORE_PARQUET.key -> "false") {
       val partitionedTable = "ext_multiformat_partition_table_with_data"
       val avroPartitionTable = "ext_avro_partition_table"
       val pqPartitionTable = "ext_pq_partition_table"
@@ -195,7 +196,57 @@ class MultiFormatTableSuite
         val allData = sql(selectQuery)
         checkAnswer(allData, Seq(Row(1, "a"), Row(2, "b")))
       }
-//      }
+      //      }
+    }
+  }
+
+// This creates a parquet table and tests plans; writes data, etc.
+  test("create hive table with multi format partitions - test plan") {
+    withTempDir { baseDir =>
+      val partitionedTable = "ext_multiformat_partition_table"
+
+      val partitions = createMultiformatPartitionDefinitions(baseDir)
+
+      withTable(partitionedTable) {
+        assert(baseDir.listFiles.isEmpty)
+
+        createTableWithPartitions(partitionedTable, baseDir, partitions)
+
+        val selectQuery =
+          s"""
+             |SELECT key, value FROM ${partitionedTable}
+           """.stripMargin
+
+        val plan = parser.parsePlan(selectQuery)
+
+        plan.queryExecution.sparkPlan.find(_.isInstanceOf[HiveTableScanExec]) shouldNot equal(None)
+
+      }
+    }
+  }
+
+  // This creates a parquet table and tests plans; writes data, etc.
+  test("create hive table with only parquet partitions - test plan") {
+    withTempDir { baseDir =>
+      val partitionedTable = "ext_parquet_partition_table"
+
+      val partitions = createParquetPartitionDefinitions(baseDir)
+
+      withTable(partitionedTable) {
+        assert(baseDir.listFiles.isEmpty)
+
+        createTableWithPartitions(partitionedTable, baseDir, partitions)
+
+        val selectQuery =
+          s"""
+             |SELECT key, value FROM ${partitionedTable}
+           """.stripMargin
+
+        val plan = parser.parsePlan(selectQuery)
+
+        plan.queryExecution.sparkPlan.find(_.isInstanceOf[FileSourceScanExec]) shouldNot equal(None)
+
+      }
     }
   }
 
@@ -278,6 +329,21 @@ class MultiFormatTableSuite
       ),
       PartitionDefinition(
         partitionCol, partitionVal2, partitionPath_part2.toURI, format = Some("AVRO")
+      )
+    )
+  }
+
+  private def createParquetPartitionDefinitions(baseDir: File): List[PartitionDefinition] = {
+    val basePath = baseDir.getCanonicalPath
+    val partitionPath_part1 = new File(basePath + s"/$partitionCol=$partitionVal1")
+    val partitionPath_part2 = new File(basePath + s"/$partitionCol=$partitionVal2")
+
+    List(
+      PartitionDefinition(
+        partitionCol, partitionVal1, partitionPath_part1.toURI, format = Some("PARQUET")
+      ),
+      PartitionDefinition(
+        partitionCol, partitionVal2, partitionPath_part2.toURI, format = Some("PARQUET")
       )
     )
   }
