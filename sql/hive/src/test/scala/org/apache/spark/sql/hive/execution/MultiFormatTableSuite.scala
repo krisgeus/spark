@@ -19,18 +19,14 @@ package org.apache.spark.sql.hive.execution
 
 import java.io.File
 import java.net.URI
-import java.util.Locale
 
 import org.scalatest.BeforeAndAfterEach
 
 import org.apache.spark.sql.{DataFrame, QueryTest, Row}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HiveTableRelation}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, Project}
+import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.command.DDLUtils
-import org.apache.spark.sql.execution.datasources.{LogicalRelation, PartitioningAwareFileIndex}
-import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.test.TestHiveSingleton
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SQLTestUtils
@@ -191,121 +187,6 @@ class MultiFormatTableSuite
              |SELECT key, value FROM ${partitionedTable}
            """.stripMargin
 
-        // First check if the logical plan contains the partition format info
-        //        val parquetPlan = parser.parsePlan(parquetPartitionSelectQuery)
-        //        val avroPlan = parser.parsePlan(avroPartitionSelectQuery)
-        //        val avroCheckPlan = parser.parsePlan(avroCheckTableSelectQuery)
-        val avroParquetPlan = parser.parsePlan(selectQuery)
-        // scalastyle:off println
-        println("=========== 1 ===========")
-        println(avroParquetPlan)
-        println("=========== 2 ===========")
-        println(avroParquetPlan.queryExecution)
-        println("=========== 3 ===========")
-        println(avroParquetPlan.queryExecution.sparkPlan.prettyJson)
-        println("=========== 4 ===========")
-        println(avroParquetPlan.queryExecution.analyzed.prettyJson)
-        println("=========== 5 ===========")
-        println(avroParquetPlan.queryExecution.optimizedPlan.prettyJson)
-        println("=========== 6 ===========")
-        println(avroParquetPlan.queryExecution.executedPlan.prettyJson)
-        println("=========== 7 ===========")
-        val executedAvroParquetPartitionFileIndexClasses = avroParquetPlan.queryExecution.
-          executedPlan.collect {
-          case f: HiveTableScanExec =>
-            f.rawPartitions.seq.foreach(println(_))
-            f.rawPartitions.seq.foreach(x => {
-              println(x.getDeserializer )
-              println(x.getInputFormatClass)
-              println(x.getOutputFormatClass)
-            })
-
-        }
-        //        println("=========== 1 ===========")
-        //        println(parquetPlan)
-        //        println("=========== 2 ===========")
-        //        println(parquetPlan.queryExecution)
-        //        println("=========== 3 ===========")
-        //        println(avroPlan)
-        //        println("=========== 4 ===========")
-        //        println(avroPlan.queryExecution)
-        //        println("=========== 5 ===========")
-        //        println(parquetPlan.queryExecution.sparkPlan.prettyJson)
-        //        println("=========== 5B ===========")
-        //        val sparkPlanClasses = parquetPlan.queryExecution.sparkPlan.collect {
-        //          //          case e => e.getClass
-        //          case project: ProjectExec => s"ProjectExec: ${project.projectList}"
-        //          case filesource: FileSourceScanExec => s"FileScanExec: ${filesource.relation}"
-        //        }
-        //        sparkPlanClasses.foreach(println(_))
-        //        println("=========== 6 ===========")
-        //        println(parquetPlan.queryExecution.analyzed.prettyJson)
-        //        println("=========== 6B ===========")
-        //        val analyzedClasses = parquetPlan.queryExecution.analyzed.collect {
-        //          case e => e.getClass
-        //        }
-        //        analyzedClasses.foreach(println(_))
-        //        println("=========== 7 ===========")
-        //        println(parquetPlan.queryExecution.optimizedPlan.prettyJson)
-        //        println("=========== 7B ===========")
-        //        val optimizedClasses = parquetPlan.queryExecution.optimizedPlan.collect {
-        //          //          case e => e.getClass
-        //          case p: Project => s"Project: ${p.projectList}"
-        //          case f: Filter => s"Filter: ${f}"
-        //          case r: LogicalRelation => s"Relation: ${r.catalogTable.get.tableType.name}"
-        //        }
-        //        optimizedClasses.foreach(println(_))
-        //
-        //        println("=========== 8 ===========")
-        //        println(parquetPlan.queryExecution.executedPlan.prettyJson)
-        //        println("=========== 8B ===========")
-        //        val executedClasses = parquetPlan.queryExecution.executedPlan.collect {
-        //          case f: FileSourceScanExec =>
-        //            f.relation.location.listFiles(f.partitionFilters, f.dataFilters)
-        //        }
-        //        executedClasses.foreach(println(_))
-        //        println("=========== 8C ===========")
-        //        val executedPartitionClasses = parquetPlan.queryExecution.executedPlan.collect {
-        //          case f: FileSourceScanExec =>
-        //            f.relation.location.listFiles(f.partitionFilters, f.dataFilters).map {
-        //              pd => pd.format
-        //            }
-        //        }
-        //        executedPartitionClasses.foreach(println(_))
-        //        println("=========== 9 ===========")
-        //        val executedAvroPartitionClasses = avroPlan.queryExecution.executedPlan.collect {
-        //          case f: FileSourceScanExec =>
-        //            f.relation.location.listFiles(f.partitionFilters, f.dataFilters).map {
-        //              pd => pd.format
-        //            }
-        //        }
-        //        executedAvroPartitionClasses.foreach(println(_))
-        //        assert(executedAvroPartitionClasses.flatten.toList.head
-        //          .contains("org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat"))
-        //        println("=========== 10A ===========")
-        //        val executedAvroCheckFileIndexClasses = avroCheckPlan.queryExecution
-        // .executedPlan.collect {
-        //          case f: HiveTableScanExec =>
-        //            f.relation.tableMeta.storage
-        //
-        //
-        //        }
-        //        executedAvroCheckFileIndexClasses.foreach(println(_))
-        //        //        assert(executedAvroCheckFileIndexClasses.toList.head
-        //        //          .isInstanceOf[PartitioningAwareFileIndex])
-        //        println("=========== 10B ===========")
-        //        val executedAvroPartitionFileIndexClasses = avroPlan.queryExecution
-        // .executedPlan.collect {
-        //          case e => e.getClass
-        //        }
-        //        executedAvroPartitionFileIndexClasses.foreach(println(_))
-        //        assert(executedAvroPartitionFileIndexClasses.toList.head
-        //          .isInstanceOf[PartitioningAwareFileIndex])
-        //        //        parquetPlan.queryExecution.optimizedPlan.
-        //        parquetPlan.queryExecution.analyzed
-        //        parquetPlan.queryExecution.optimizedPlan
-        // scalastyle:on println
-
         // Selecting data from the partition currently fails because it tries to
         // read avro data with parquet reader
         val avroPartitionData = sql(avroPartitionSelectQuery)
@@ -373,34 +254,6 @@ class MultiFormatTableSuite
              |SELECT key, value FROM ${partitionedTable}
            """.stripMargin
 
-        val avroParquetPlan = parser.parsePlan(selectQuery)
-        // scalastyle:off println
-        println("=========== 1 ===========")
-        println(avroParquetPlan)
-        println("=========== 2 ===========")
-        println(avroParquetPlan.queryExecution)
-        println("=========== 3 ===========")
-        println(avroParquetPlan.queryExecution.sparkPlan.prettyJson)
-        println("=========== 4 ===========")
-        println(avroParquetPlan.queryExecution.analyzed.prettyJson)
-        println("=========== 5 ===========")
-        println(avroParquetPlan.queryExecution.optimizedPlan.prettyJson)
-        println("=========== 6 ===========")
-        println(avroParquetPlan.queryExecution.executedPlan.prettyJson)
-        println("=========== 7 ===========")
-        val executedAvroParquetPartitionFileIndexClasses = avroParquetPlan.queryExecution.
-          executedPlan.collect {
-          case f: HiveTableScanExec =>
-            f.rawPartitions.seq.foreach(println(_))
-            f.rawPartitions.seq.foreach(x => {
-              println(x.getDeserializer )
-              println(x.getInputFormatClass)
-              println(x.getOutputFormatClass)
-            })
-
-        }
-        // scalastyle:on println
-
         val avroPartitionData = sql(avroPartitionSelectQuery)
         checkAnswer(avroPartitionData, Row(2, "b"))
 
@@ -412,61 +265,6 @@ class MultiFormatTableSuite
 
       }
     }
-  }
-
-  test("check that ifconvertable is false -- we don't want to optimize!") {
-    withTempDir { baseDir =>
-      val partitionedTable = "ext_multiformat_partition_table_with_data"
-      val avroPartitionTable = "ext_avro_partition_table"
-      val pqPartitionTable = "ext_pq_partition_table"
-
-      val partitions = createMultiformatPartitionDefinitions(baseDir)
-
-      withTable(partitionedTable, avroPartitionTable, pqPartitionTable) {
-        assert(baseDir.listFiles.isEmpty)
-
-        createTableWithPartitions(partitionedTable, baseDir, partitions)
-        createAvroCheckTable(avroPartitionTable, partitions.last)
-        createPqCheckTable(pqPartitionTable, partitions.head)
-        val selectQuery =
-          s"""
-             |SELECT key, value FROM ${partitionedTable}
-           """.stripMargin
-
-        // INSERT OVERWRITE TABLE only works for the default table format.
-        // So we can use it here to insert data into the parquet partition
-        sql(
-          s"""
-             |INSERT OVERWRITE TABLE $pqPartitionTable
-             |SELECT 1 as id, 'a' as value
-                  """.stripMargin)
-
-        val parquetData = spark.read.parquet(partitions.head.location.toString)
-        checkAnswer(parquetData, Row(1, "a"))
-
-        sql(
-          s"""
-             |INSERT OVERWRITE TABLE $avroPartitionTable
-             |SELECT 2, 'b'
-           """.stripMargin
-        )
-
-        val avroParquetPlan = parser.parsePlan(selectQuery)
-        // scalastyle:off println
-        println("=========== 1 ===========")
-        println(avroParquetPlan)
-        avroParquetPlan.logicalPlan
-        println("=========== 2 ===========")
-        println(avroParquetPlan.queryExecution)
-        // scalastyle:on println
-      }
-    }
-  }
-
-  private def isConvertible(relation: HiveTableRelation): Boolean = {
-    val serde = relation.tableMeta.storage.serde.getOrElse("").toLowerCase(Locale.ROOT)
-    serde.contains("parquet") && conf.getConf(HiveUtils.CONVERT_METASTORE_PARQUET) ||
-      serde.contains("orc") && conf.getConf(HiveUtils.CONVERT_METASTORE_ORC)
   }
 
   private def createMultiformatPartitionDefinitions(baseDir: File): List[PartitionDefinition] = {
