@@ -117,14 +117,14 @@ class MultiFormatTableSuite
           avroPartition.storage.serde.contains("org.apache.hadoop.hive.serde2.avro.AvroSerDe")
         )
 
-//        assert(
-//          avroPartition.storage.inputFormat
-//            .contains("org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat")
-//        )
+        assert(
+          avroPartition.storage.inputFormat
+            .contains("org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat")
+        )
       }
     }
   }
-
+//  // This creates a parquet table and tests plans; writes data, etc.
   test("create hive table with multi format partitions containing correct data") {
     val catalog = spark.sessionState.catalog
     withTempDir { baseDir =>
@@ -215,12 +215,6 @@ class MultiFormatTableSuite
         println("=========== 6B ===========")
         val analyzedClasses = parquetPlan.queryExecution.analyzed.collect {
           case e => e.getClass
-          //          case project: ProjectExec => s"ProjectExec: ${project.projectList}"
-          //          case filesource: FileSourceScanExec => s"FileScanExec: ${filesource.relation}"
-          // class org.apache.spark.sql.catalyst.plans.logical.Project
-          //          class org.apache.spark.sql.catalyst.plans.logical.Filter
-          //          class org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
-          //          class org.apache.spark.sql.execution.datasources.LogicalRelation
         }
         analyzedClasses.foreach(println(_))
         println("=========== 7 ===========")
@@ -265,6 +259,7 @@ class MultiFormatTableSuite
           case f: HiveTableScanExec =>
             f.relation.tableMeta.storage
 
+
         }
         executedAvroCheckFileIndexClasses.foreach(println(_))
         //        assert(executedAvroCheckFileIndexClasses.toList.head
@@ -285,6 +280,74 @@ class MultiFormatTableSuite
         // read avro data with parquet reader
         val avroPartitionData = sql(avroPartitionSelectQuery)
         checkAnswer(avroPartitionData, Row(2, "b"))
+
+        val allData = sql(selectQuery)
+        checkAnswer(allData, Seq(Row(1, "a"), Row(2, "b")))
+
+      }
+    }
+  }
+
+  //  This creates an avro table and tests plans; writes data, etc.
+  test("create hive avro table with multi format partitions containing correct data") {
+    withTempDir { baseDir =>
+      val partitionedTable = "ext_multiformat_partition_table_with_data"
+      val avroPartitionTable = "ext_avro_partition_table"
+      val pqPartitionTable = "ext_pq_partition_table"
+
+      val partitions = createMultiformatPartitionDefinitions(baseDir)
+
+      withTable(partitionedTable, avroPartitionTable, pqPartitionTable) {
+        assert(baseDir.listFiles.isEmpty)
+
+        createTableWithPartitions(partitionedTable, baseDir, partitions, true)
+        createAvroCheckTable(avroPartitionTable, partitions.last)
+        createPqCheckTable(pqPartitionTable, partitions.head)
+
+        // INSERT OVERWRITE TABLE only works for the default table format.
+        // So we can use it here to insert data into the parquet partition
+        sql(
+          s"""
+             |INSERT OVERWRITE TABLE $pqPartitionTable
+             |SELECT 1 as id, 'a' as value
+                  """.stripMargin)
+
+        val parquetData = spark.read.parquet(partitions.head.location.toString)
+        checkAnswer(parquetData, Row(1, "a"))
+
+        sql(
+          s"""
+             |INSERT OVERWRITE TABLE $avroPartitionTable
+             |SELECT 2, 'b'
+           """.stripMargin
+        )
+
+        // Directly reading from the avro table should yield correct results
+        val avroData = spark.read.table(avroPartitionTable)
+        checkAnswer(avroData, Row(2, "b"))
+
+        val parquetPartitionSelectQuery =
+          s"""
+             |SELECT key, value FROM ${partitionedTable}
+             |WHERE ${partitionCol}='${partitionVal1}'
+           """.stripMargin
+
+        val avroPartitionSelectQuery =
+          s"""
+             |SELECT key, value FROM ${partitionedTable}
+             |WHERE ${partitionCol}='${partitionVal2}'
+           """.stripMargin
+
+        val selectQuery =
+          s"""
+             |SELECT key, value FROM ${partitionedTable}
+           """.stripMargin
+
+        val avroPartitionData = sql(avroPartitionSelectQuery)
+        checkAnswer(avroPartitionData, Row(2, "b"))
+
+        val parquetPartitionData = sql(parquetPartitionSelectQuery)
+        checkAnswer(parquetPartitionData, Row(1, "a"))
 
         val allData = sql(selectQuery)
         checkAnswer(allData, Seq(Row(1, "a"), Row(2, "b")))

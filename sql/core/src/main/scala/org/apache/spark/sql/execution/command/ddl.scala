@@ -442,6 +442,8 @@ case class AlterTableFormatCommand(
     if (partSpec.isEmpty) {
       val newTable = table.withNewStorage(
         serde = format.serde.orElse(table.storage.serde),
+        inputFormat = format.inputFormat.orElse(table.storage.inputFormat),
+        outputFormat = format.outputFormat.orElse(table.storage.outputFormat),
         properties = table.storage.properties ++ format.properties)
       catalog.alterTable(newTable)
     } else {
@@ -449,6 +451,8 @@ case class AlterTableFormatCommand(
       val part = catalog.getPartition(table.identifier, spec)
       val newPart = part.copy(storage = part.storage.copy(
         serde = format.serde.orElse(part.storage.serde),
+        inputFormat = format.inputFormat.orElse(table.storage.inputFormat),
+        outputFormat = format.outputFormat.orElse(table.storage.outputFormat),
         properties = part.storage.properties ++ format.properties))
       catalog.alterPartitions(table.identifier, Seq(newPart))
     }
